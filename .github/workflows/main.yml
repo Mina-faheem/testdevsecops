@@ -10,9 +10,15 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      # ----------------------------
+      # Checkout code
+      # ----------------------------
       - name: Checkout code
         uses: actions/checkout@v4
 
+      # ----------------------------
+      # Prepare folders
+      # ----------------------------
       - name: Create directories
         run: mkdir -p trivy-results sbom
 
@@ -25,7 +31,7 @@ jobs:
           | sh -s -- -b /usr/local/bin v0.69.3
 
       # ----------------------------
-      # Run scans
+      # Run Trivy scans
       # ----------------------------
       - name: Trivy FS Scan
         run: trivy fs --severity HIGH,CRITICAL --format json --output trivy-results/fs.json .
@@ -36,7 +42,7 @@ jobs:
       - name: Trivy Secret Scan
         run: trivy fs --scanners secret --format json --output trivy-results/secrets.json .
 
-      - name: SBOM Generation
+      - name: Generate SBOM
         run: trivy fs --format cyclonedx --output sbom/sbom.json .
 
       # ----------------------------
@@ -48,6 +54,7 @@ jobs:
 
           python3 <<EOF
           import requests, os
+          from datetime import date, timedelta
 
           base_url = os.getenv("DD_URL").rstrip("/")
           api_key = os.getenv("DD_API_KEY")
@@ -56,7 +63,7 @@ jobs:
           headers = {"Authorization": f"Token {api_key}"}
 
           # ----------------------------
-          # 1. Get Product ID dynamically
+          # 1. Find Product ID
           # ----------------------------
           products = requests.get(
               f"{base_url}/api/v2/products/",
@@ -76,14 +83,19 @@ jobs:
           print(f"✅ Product ID: {product_id}")
 
           # ----------------------------
-          # 2. Create Engagement automatically
+          # 2. Create Engagement (FIXED)
           # ----------------------------
+          today = date.today()
+          end = today + timedelta(days=30)
+
           engagement_payload = {
-              "name": "CI Auto Scan",
+              "name": f"CI Scan {today}",
               "product": product_id,
               "status": "In Progress",
               "engagement_type": "CI/CD",
-              "build_id": "github-${{ github.run_id }}"
+              "target_start": today.isoformat(),
+              "target_end": end.isoformat(),
+              "active": True
           }
 
           r = requests.post(
@@ -109,12 +121,12 @@ jobs:
               "CycloneDX SBOM": "sbom/sbom.json"
           }
 
-          for scan_type, file_path in scans.items():
-              if not os.path.exists(file_path):
-                  print(f"Skipping {file_path}")
+          for scan_type, path in scans.items():
+              if not os.path.exists(path):
+                  print(f"Skipping {path}")
                   continue
 
-              with open(file_path, "rb") as f:
+              with open(path, "rb") as f:
                   files = {"file": f}
                   data = {
                       "scan_type": scan_type,
@@ -134,9 +146,9 @@ jobs:
           EOF
 
         env:
-          DD_API_KEY: 28d505b073684c295589b6d6dfbe7b48f3195380
+          DD_API_KEY: ${{ secrets.DEFECTDOJO_API_KEY }}
           DD_URL: "http://0f1dcdfc473c.mylabserver.com:8080"
-          DD_PRODUCT_NAME: "GitHub scan trivy"
+          DD_PRODUCT_NAME: "Test Product"
 
       # ----------------------------
       # Upload artifacts
