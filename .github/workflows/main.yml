@@ -1,0 +1,151 @@
+name: trivy-to-defectdojo-auto
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  security-scan:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Create directories
+        run: mkdir -p trivy-results sbom
+
+      # ----------------------------
+      # Install Trivy
+      # ----------------------------
+      - name: Install Trivy
+        run: |
+          curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh \
+          | sh -s -- -b /usr/local/bin v0.69.3
+
+      # ----------------------------
+      # Run scans
+      # ----------------------------
+      - name: Trivy FS Scan
+        run: trivy fs --severity HIGH,CRITICAL --format json --output trivy-results/fs.json .
+
+      - name: Trivy Config Scan
+        run: trivy config --format json --output trivy-results/iac.json .
+
+      - name: Trivy Secret Scan
+        run: trivy fs --scanners secret --format json --output trivy-results/secrets.json .
+
+      - name: SBOM Generation
+        run: trivy fs --format cyclonedx --output sbom/sbom.json .
+
+      # ----------------------------
+      # Upload to DefectDojo (AUTO)
+      # ----------------------------
+      - name: Upload to DefectDojo
+        run: |
+          pip install requests
+
+          python3 <<EOF
+          import requests, os
+
+          base_url = os.getenv("DD_URL").rstrip("/")
+          api_key = os.getenv("DD_API_KEY")
+          product_name = os.getenv("DD_PRODUCT_NAME")
+
+          headers = {"Authorization": f"Token {api_key}"}
+
+          # ----------------------------
+          # 1. Get Product ID dynamically
+          # ----------------------------
+          products = requests.get(
+              f"{base_url}/api/v2/products/",
+              headers=headers
+          ).json()["results"]
+
+          product_id = None
+          for p in products:
+              if p["name"] == product_name:
+                  product_id = p["id"]
+                  break
+
+          if not product_id:
+              print("❌ Product not found")
+              exit(1)
+
+          print(f"✅ Product ID: {product_id}")
+
+          # ----------------------------
+          # 2. Create Engagement automatically
+          # ----------------------------
+          engagement_payload = {
+              "name": "CI Auto Scan",
+              "product": product_id,
+              "status": "In Progress",
+              "engagement_type": "CI/CD",
+              "build_id": "github-${{ github.run_id }}"
+          }
+
+          r = requests.post(
+              f"{base_url}/api/v2/engagements/",
+              headers=headers,
+              data=engagement_payload
+          )
+
+          if r.status_code != 201:
+              print("❌ Engagement creation failed:", r.text)
+              exit(1)
+
+          engagement_id = r.json()["id"]
+          print(f"✅ Engagement ID: {engagement_id}")
+
+          # ----------------------------
+          # 3. Upload scans
+          # ----------------------------
+          scans = {
+              "Trivy Scan": "trivy-results/fs.json",
+              "Trivy Config Scan": "trivy-results/iac.json",
+              "Trivy Secret Scan": "trivy-results/secrets.json",
+              "CycloneDX SBOM": "sbom/sbom.json"
+          }
+
+          for scan_type, file_path in scans.items():
+              if not os.path.exists(file_path):
+                  print(f"Skipping {file_path}")
+                  continue
+
+              with open(file_path, "rb") as f:
+                  files = {"file": f}
+                  data = {
+                      "scan_type": scan_type,
+                      "engagement": engagement_id,
+                      "active": "true",
+                      "verified": "false"
+                  }
+
+                  res = requests.post(
+                      f"{base_url}/api/v2/import-scan/",
+                      headers=headers,
+                      files=files,
+                      data=data
+                  )
+
+                  print(scan_type, res.status_code, res.text)
+          EOF
+
+        env:
+          DD_API_KEY: 28d505b073684c295589b6d6dfbe7b48f3195380
+          DD_URL: "http://0f1dcdfc473c.mylabserver.com:8080"
+          DD_PRODUCT_NAME: "Test Product"
+
+      # ----------------------------
+      # Upload artifacts
+      # ----------------------------
+      - name: Upload Reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: trivy-results
+          path: |
+            trivy-results/
+            sbom/
