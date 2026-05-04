@@ -146,7 +146,7 @@ jobs:
           EOF
 
         env:
-          DD_API_KEY: ${{ secrets.DEFECTDOJO_API_KEY }}
+          DD_API_KEY: 28d505b073684c295589b6d6dfbe7b48f3195380
           DD_URL: "http://0f1dcdfc473c.mylabserver.com:8080"
           DD_PRODUCT_NAME: "Test Product"
 
