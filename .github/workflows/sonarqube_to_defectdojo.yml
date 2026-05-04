@@ -10,8 +10,9 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+
       # -------------------------
-      # Checkout
+      # Checkout repo
       # -------------------------
       - name: Checkout code
         uses: actions/checkout@v4
@@ -21,23 +22,31 @@ jobs:
       # -------------------------
       # Install Java (required for SonarScanner)
       # -------------------------
-      - name: Set up JDK
+      - name: Set up Java
         uses: actions/setup-java@v4
         with:
-          distribution: 'temurin'
-          java-version: '17'
+          distribution: temurin
+          java-version: 17
 
       # -------------------------
-      # Install SonarScanner
+      # Install SonarScanner (FIXED)
       # -------------------------
       - name: Install SonarScanner
         run: |
-          curl -sSLo sonar.zip https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/sonar-scanner-cli-5.0.1.3006-linux.zip
+          SCANNER_VERSION=5.0.1.3006
+          curl -sSLo sonar.zip https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/sonar-scanner-cli-${SCANNER_VERSION}-linux.zip
           unzip sonar.zip
-          echo "$PWD/sonar-scanner-*/bin" >> $GITHUB_PATH
+          mv sonar-scanner-${SCANNER_VERSION}-linux sonar-scanner
+          echo "$(pwd)/sonar-scanner/bin" >> $GITHUB_PATH
 
       # -------------------------
-      # Run SonarQube scan
+      # Verify installation
+      # -------------------------
+      - name: Verify SonarScanner
+        run: sonar-scanner -v
+
+      # -------------------------
+      # Run SonarQube analysis
       # -------------------------
       - name: Run SonarQube Scan
         env:
@@ -46,13 +55,13 @@ jobs:
           sonar-scanner \
             -Dsonar.projectKey=my-project \
             -Dsonar.sources=. \
-            -Dsonar.host.url= http://0f1dcdfc471c.mylabserver.com \
+            -Dsonar.host.url=http://0f1dcdfc471c.mylabserver.com/ \
             -Dsonar.login=$SONAR_TOKEN
 
       # -------------------------
-      # Export report (simple JSON via API)
+      # Export issues from SonarQube
       # -------------------------
-      - name: Get SonarQube Issues
+      - name: Export SonarQube Issues
         run: |
           curl -u ${{ secrets.SONAR_TOKEN }}: \
           "${{ secrets.SONAR_URL }}/api/issues/search?componentKeys=my-project" \
@@ -108,5 +117,5 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: sonar-report
+          name: sonar-results
           path: sonar-report.json
