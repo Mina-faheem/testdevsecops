@@ -61,10 +61,14 @@ jobs:
       # -------------------------
       # Export issues from SonarQube
       # -------------------------
-      - name: Export SonarQube Issues
+      - name: Export Sonar Issues
         run: |
-          curl -u sqp_aa4a3fee3804257139d76ba11457221460de81cc: "http://0f1dcdfc471c.mylabserver.com/api/system/status" -o sonar-report.json
-
+          curl -u sqp_aa4a3fee3804257139d76ba11457221460de81cc: \
+          "http://0f1dcdfc471c.mylabserver.com/api/issues/search?componentKeys=my-project&resolved=false" \
+          -o sonar-report.json
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_URL: http://your-sonarqube:9000
       # -------------------------
       # Upload to DefectDojo
       # -------------------------
