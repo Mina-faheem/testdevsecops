@@ -63,7 +63,7 @@ jobs:
       # -------------------------
       - name: Export SonarQube Issues
         run: |
-          curl -u sqp_aa4a3fee3804257139d76ba11457221460de81cc: "http://0f1dcdfc471c.mylabserver.com/api/system/status"
+          curl -u sqp_aa4a3fee3804257139d76ba11457221460de81cc: "http://0f1dcdfc471c.mylabserver.com/api/system/status" -o sonar-report.json
 
       # -------------------------
       # Upload to DefectDojo
