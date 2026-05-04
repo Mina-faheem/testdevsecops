@@ -18,7 +18,7 @@ jobs:
         run: mkdir -p trivy-results sbom
 
       - name: Set up Trivy
-        uses: aquasecurity/setup-trivy@v0.2.1
+        uses: aquasecurity/setup-trivy@v0.2.6
         with:
           trivy-version: '0.69.3'
 
