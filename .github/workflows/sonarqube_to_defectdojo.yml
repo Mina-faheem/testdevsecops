@@ -63,8 +63,8 @@ jobs:
       # -------------------------
       - name: Export SonarQube Issues
         run: |
-          curl -u ${{ secrets.SONAR_TOKEN }}: \
-          "${{ secrets.SONAR_URL }}/api/issues/search?componentKeys=my-project" \
+          curl -u sqp_aa4a3fee3804257139d76ba11457221460de81cc: \
+          http://0f1dcdfc471c.mylabserver.com//api/issues/search?componentKeys=my-project" \
           -o sonar-report.json
 
       # -------------------------
