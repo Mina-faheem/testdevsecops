@@ -50,7 +50,7 @@ jobs:
       # -------------------------
       - name: Run SonarQube Scan
         env:
-          SONAR_TOKEN: sqp_97518eea19d83c40e9d3176dd957619e945829d9
+          SONAR_TOKEN: sqp_aa4a3fee3804257139d76ba11457221460de81cc
         run: |
           sonar-scanner \
             -Dsonar.projectKey=my-project \
