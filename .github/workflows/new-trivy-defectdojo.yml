@@ -20,7 +20,7 @@ jobs:
       - name: Set up Trivy
         uses: aquasecurity/setup-trivy@v0.2.1
         with:
-          trivy-version: '0.56.1'
+          trivy-version: '0.69.3'
 
       - name: Trivy Filesystem Scan
         run: trivy fs --severity HIGH,CRITICAL --format json --output trivy-results/fs-scan.json .
