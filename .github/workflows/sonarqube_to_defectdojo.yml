@@ -56,7 +56,8 @@ jobs:
             -Dsonar.projectKey=my-project \
             -Dsonar.sources=. \
             -Dsonar.host.url=http://0f1dcdfc471c.mylabserver.com/ \
-            -Dsonar.login=$SONAR_TOKEN
+            -Dsonar.login=$SONAR_TOKEN \
+            -Dsonar.qualitygate.wait=true
 
       # -------------------------
       # Export issues from SonarQube
