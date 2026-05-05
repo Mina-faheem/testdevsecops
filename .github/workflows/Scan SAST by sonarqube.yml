@@ -12,7 +12,7 @@ jobs:
 
     steps:
       # -------------------------------------------------
-      # 1. Checkout source code
+      # 1. Checkout source
       # -------------------------------------------------
       - name: Checkout source code
         uses: actions/checkout@v4
@@ -20,7 +20,7 @@ jobs:
           fetch-depth: 0
 
       # -------------------------------------------------
-      # 2. Setup Java
+      # 2. Java (SonarScanner requirement)
       # -------------------------------------------------
       - name: Set up Java 17
         uses: actions/setup-java@v4
@@ -40,14 +40,14 @@ jobs:
           mv sonar-scanner-${SCANNER_VERSION}-linux sonar-scanner
           echo "$(pwd)/sonar-scanner/bin" >> $GITHUB_PATH
 
+      # -------------------------------------------------
+      # 4. Install jq (needed for API parsing)
+      # -------------------------------------------------
       - name: Install jq
         run: sudo apt-get update && sudo apt-get install -y jq
 
-      - name: Verify SonarScanner
-        run: sonar-scanner -v
-
       # -------------------------------------------------
-      # 4. Run SonarQube Analysis
+      # 5. Run SonarQube Analysis (SAFE CONFIG)
       # -------------------------------------------------
       - name: Run SonarQube Scan
         env:
@@ -56,12 +56,14 @@ jobs:
         run: |
           sonar-scanner \
             -Dsonar.projectKey=my-project \
-            -Dsonar.sources=. \
             -Dsonar.host.url=$SONAR_URL \
-            -Dsonar.login=$SONAR_TOKEN
+            -Dsonar.login=$SONAR_TOKEN \
+            -Dsonar.sources=src \
+            -Dsonar.exclusions=**/.git/**,**/.scannerwork/**,**/node_modules/**,**/dist/**,**/build/** \
+            -Dsonar.sourceEncoding=UTF-8
 
       # -------------------------------------------------
-      # 5. CORRECT Quality Gate Check (THIS FIXES jq ERROR)
+      # 6. WAIT FOR COMPUTE ENGINE + QUALITY GATE
       # -------------------------------------------------
       - name: Check SonarQube Quality Gate
         env:
@@ -77,13 +79,11 @@ jobs:
           CE_TASK_ID=$(grep ceTaskId $REPORT_FILE | cut -d'=' -f2)
           SERVER_URL=$(grep serverUrl $REPORT_FILE | cut -d'=' -f2)
 
-          echo "CE Task ID: $CE_TASK_ID"
+          echo "Compute Engine Task ID: $CE_TASK_ID"
 
-          # Wait for SonarQube background task
           for i in {1..30}; do
             STATUS=$(curl -s -u $SONAR_TOKEN: \
-              "$SERVER_URL/api/ce/task?id=$CE_TASK_ID" \
-              | jq -r '.task.status')
+              "$SERVER_URL/api/ce/task?id=$CE_TASK_ID" | jq -r '.task.status')
 
             echo "Compute Engine status: $STATUS"
 
@@ -92,7 +92,7 @@ jobs:
             fi
 
             if [ "$STATUS" = "FAILED" ]; then
-              echo "❌ SonarQube Compute Engine failed"
+              echo "❌ SonarQube Compute Engine FAILED"
               exit 1
             fi
 
@@ -113,7 +113,7 @@ jobs:
           echo "✅ Quality Gate PASSED"
 
       # -------------------------------------------------
-      # 6. Export SonarQube Issues
+      # 7. Export SonarQube Issues
       # -------------------------------------------------
       - name: Export SonarQube Issues
         env:
@@ -125,7 +125,7 @@ jobs:
           -o sonar-report.json
 
       # -------------------------------------------------
-      # 7. Upload Results to DefectDojo
+      # 8. Upload to DefectDojo
       # -------------------------------------------------
       - name: Upload to DefectDojo
         env:
@@ -155,7 +155,7 @@ jobs:
           EOF
 
       # -------------------------------------------------
-      # 8. Upload artifact
+      # 9. Upload artifact
       # -------------------------------------------------
       - name: Upload SonarQube Report
         if: always()
