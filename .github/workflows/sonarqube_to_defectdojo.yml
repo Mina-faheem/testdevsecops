@@ -55,7 +55,7 @@ jobs:
           sonar-scanner \
             -Dsonar.projectKey=my-project \
             -Dsonar.sources=. \
-            -Dsonar.host.url=http://0f1dcdfc471c.mylabserver.com:9000/ \
+            -Dsonar.host.url=http://0f1dcdfc471c.mylabserver.com/ \
             -Dsonar.login=$SONAR_TOKEN \
             -Dsonar.qualitygate.wait=true
 
@@ -69,7 +69,7 @@ jobs:
           -o sonar-report.json
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-          SONAR_URL: http://your-sonarqube:9000
+          SONAR_URL: http://your-sonarqube
       # -------------------------
       # Upload to DefectDojo
       # -------------------------
