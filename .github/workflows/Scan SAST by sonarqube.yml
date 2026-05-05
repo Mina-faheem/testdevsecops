@@ -20,7 +20,7 @@ jobs:
           fetch-depth: 0
 
       # -------------------------------------------------
-      # 2. Setup Java (required for SonarScanner)
+      # 2. Setup Java
       # -------------------------------------------------
       - name: Set up Java 17
         uses: actions/setup-java@v4
@@ -29,7 +29,7 @@ jobs:
           java-version: 17
 
       # -------------------------------------------------
-      # 3. Install SonarScanner CLI
+      # 3. Install SonarScanner
       # -------------------------------------------------
       - name: Install SonarScanner
         run: |
@@ -40,6 +40,9 @@ jobs:
           mv sonar-scanner-${SCANNER_VERSION}-linux sonar-scanner
           echo "$(pwd)/sonar-scanner/bin" >> $GITHUB_PATH
 
+      - name: Install jq
+        run: sudo apt-get update && sudo apt-get install -y jq
+
       - name: Verify SonarScanner
         run: sonar-scanner -v
 
@@ -49,7 +52,7 @@ jobs:
       - name: Run SonarQube Scan
         env:
           SONAR_TOKEN: sqp_aa4a3fee3804257139d76ba11457221460de81cc
-          SONAR_URL: http://0f1dcdfc471c.mylabserver.com/
+          SONAR_URL: http://0f1dcdfc471c.mylabserver.com
         run: |
           sonar-scanner \
             -Dsonar.projectKey=my-project \
@@ -58,24 +61,52 @@ jobs:
             -Dsonar.login=$SONAR_TOKEN
 
       # -------------------------------------------------
-      # 5. Enforce Quality Gate (BLOCKING STEP)
+      # 5. CORRECT Quality Gate Check (THIS FIXES jq ERROR)
       # -------------------------------------------------
       - name: Check SonarQube Quality Gate
         env:
           SONAR_TOKEN: sqp_aa4a3fee3804257139d76ba11457221460de81cc
-          SONAR_URL: http://0f1dcdfc471c.mylabserver.com/
         run: |
-          echo "Waiting for SonarQube to compute Quality Gate..."
-          sleep 10
+          REPORT_FILE=".scannerwork/report-task.txt"
 
-          STATUS=$(curl -s -u $SONAR_TOKEN: \
-            "$SONAR_URL/api/qualitygates/project_status?projectKey=my-project" \
+          if [ ! -f "$REPORT_FILE" ]; then
+            echo "❌ report-task.txt not found"
+            exit 1
+          fi
+
+          CE_TASK_ID=$(grep ceTaskId $REPORT_FILE | cut -d'=' -f2)
+          SERVER_URL=$(grep serverUrl $REPORT_FILE | cut -d'=' -f2)
+
+          echo "CE Task ID: $CE_TASK_ID"
+
+          # Wait for SonarQube background task
+          for i in {1..30}; do
+            STATUS=$(curl -s -u $SONAR_TOKEN: \
+              "$SERVER_URL/api/ce/task?id=$CE_TASK_ID" \
+              | jq -r '.task.status')
+
+            echo "Compute Engine status: $STATUS"
+
+            if [ "$STATUS" = "SUCCESS" ]; then
+              break
+            fi
+
+            if [ "$STATUS" = "FAILED" ]; then
+              echo "❌ SonarQube Compute Engine failed"
+              exit 1
+            fi
+
+            sleep 5
+          done
+
+          QG_STATUS=$(curl -s -u $SONAR_TOKEN: \
+            "$SERVER_URL/api/qualitygates/project_status?projectKey=my-project" \
             | jq -r '.projectStatus.status')
 
-          echo "Quality Gate Status: $STATUS"
+          echo "Quality Gate Status: $QG_STATUS"
 
-          if [ "$STATUS" != "OK" ]; then
-            echo "❌ Quality Gate FAILED – stopping pipeline"
+          if [ "$QG_STATUS" != "OK" ]; then
+            echo "❌ Quality Gate FAILED"
             exit 1
           fi
 
@@ -87,7 +118,7 @@ jobs:
       - name: Export SonarQube Issues
         env:
           SONAR_TOKEN: sqp_aa4a3fee3804257139d76ba11457221460de81cc
-          SONAR_URL: http://0f1dcdfc471c.mylabserver.com/
+          SONAR_URL: http://0f1dcdfc471c.mylabserver.com
         run: |
           curl -s -u $SONAR_TOKEN: \
           "$SONAR_URL/api/issues/search?componentKeys=my-project&resolved=false&ps=500" \
@@ -99,8 +130,8 @@ jobs:
       - name: Upload to DefectDojo
         env:
           DD_API_KEY: 28d505b073684c295589b6d6dfbe7b48f3195380
-          DD_URL: "http://0f1dcdfc473c.mylabserver.com:8080"
-          DD_ENGAGEMENT_ID: 2
+          DD_URL: http://0f1dcdfc473c.mylabserver.com:8080
+          DD_ENGAGEMENT_ID: "2"
         run: |
           pip install --quiet requests
 
@@ -118,14 +149,13 @@ jobs:
               "verified": "false"
           }
 
-          response = requests.post(url, headers=headers, files=files, data=data)
-
-          print("DefectDojo response code:", response.status_code)
-          print(response.text)
+          r = requests.post(url, headers=headers, files=files, data=data)
+          print("DefectDojo status:", r.status_code)
+          print(r.text)
           EOF
 
       # -------------------------------------------------
-      # 8. Upload Artifact (for audit & debugging)
+      # 8. Upload artifact
       # -------------------------------------------------
       - name: Upload SonarQube Report
         if: always()
