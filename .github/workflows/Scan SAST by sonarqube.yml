@@ -133,4 +133,3 @@ jobs:
         with:
           name: sonar-report
           path: sonar-report.json
-``
