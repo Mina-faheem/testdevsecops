@@ -55,7 +55,7 @@ jobs:
           sonar-scanner \
             -Dsonar.projectKey=my-project \
             -Dsonar.sources=. \
-            -Dsonar.host.url=http://0f1dcdfc471c.mylabserver.com/ \
+            -Dsonar.host.url=http://0f1dcdfc471c.mylabserver.com:9000/ \
             -Dsonar.login=$SONAR_TOKEN \
             -Dsonar.qualitygate.wait=true
 
