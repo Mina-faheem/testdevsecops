@@ -10,13 +10,13 @@ jobs:
     runs-on: ubuntu-latest
 
     env:
-      SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
-      SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-      SONAR_PROJECT_KEY: ${{ secrets.SONAR_PROJECT_KEY }}
+      SONAR_HOST_URL: http://0f1dcdfc471c.mylabserver.com/
+      SONAR_TOKEN: sqp_aa4a3fee3804257139d76ba11457221460de81cc
+      SONAR_PROJECT_KEY: my-project
 
-      DD_URL: ${{ secrets.DD_URL }}
-      DD_API_KEY: ${{ secrets.DD_API_KEY }}
-      DD_ENGAGEMENT_ID: ${{ secrets.DD_ENGAGEMENT_ID }}
+      DD_URL: "http://0f1dcdfc473c.mylabserver.com:8080"
+      DD_API_KEY: 28d505b073684c295589b6d6dfbe7b48f3195380
+      DD_ENGAGEMENT_ID: 2
 
     steps:
       # -------------------------
