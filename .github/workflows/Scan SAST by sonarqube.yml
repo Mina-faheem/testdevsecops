@@ -1,110 +1,146 @@
-
 name: sonarqube-to-defectdojo
 
 on:
   push:
-    branches:
-      - main
+    branches: [main]
   pull_request:
 
 jobs:
   sonar-scan:
     runs-on: ubuntu-latest
 
+    env:
+      SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+      SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+      SONAR_PROJECT_KEY: ${{ secrets.SONAR_PROJECT_KEY }}
+
+      DD_URL: ${{ secrets.DD_URL }}
+      DD_API_KEY: ${{ secrets.DD_API_KEY }}
+      DD_ENGAGEMENT_ID: ${{ secrets.DD_ENGAGEMENT_ID }}
+
     steps:
-      # -------------------------------------------------
-      # 1. Checkout source code
-      # -------------------------------------------------
-      - name: Checkout repository
+      # -------------------------
+      # Checkout repo
+      # -------------------------
+      - name: Checkout code
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      # -------------------------------------------------
-      # 2. Setup Java (required by SonarScanner)
-      # -------------------------------------------------
-      - name: Set up Java 17
+      # -------------------------
+      # Setup Java
+      # -------------------------
+      - name: Set up Java
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: 17
 
-      # -------------------------------------------------
-      # 3. Install SonarScanner CLI
-      # -------------------------------------------------
+      # -------------------------
+      # Cache SonarScanner
+      # -------------------------
+      - name: Cache SonarScanner
+        uses: actions/cache@v4
+        with:
+          path: sonar-scanner
+          key: sonar-scanner-5.0.1
+
+      # -------------------------
+      # Install SonarScanner
+      # -------------------------
       - name: Install SonarScanner
         run: |
-          SCANNER_VERSION=5.0.1.3006
-          curl -sSLo sonar-scanner.zip \
-          https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/sonar-scanner-cli-${SCANNER_VERSION}-linux.zip
-          unzip sonar-scanner.zip
-          mv sonar-scanner-${SCANNER_VERSION}-linux sonar-scanner
+          if [ ! -d "sonar-scanner" ]; then
+            SCANNER_VERSION=5.0.1.3006
+            curl -sSLo sonar.zip https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/sonar-scanner-cli-${SCANNER_VERSION}-linux.zip
+            unzip sonar.zip
+            mv sonar-scanner-${SCANNER_VERSION}-linux sonar-scanner
+          fi
           echo "$(pwd)/sonar-scanner/bin" >> $GITHUB_PATH
 
-      # -------------------------------------------------
-      # 4. Run SonarQube Analysis (Signal Only)
-      # -------------------------------------------------
+      # -------------------------
+      # Verify installation
+      # -------------------------
+      - name: Verify SonarScanner
+        run: sonar-scanner -v
+
+      # -------------------------
+      # Run SonarQube analysis
+      # -------------------------
       - name: Run SonarQube Scan
-        env:
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-          SONAR_URL: ${{ secrets.SONAR_URL }}
         run: |
           sonar-scanner \
-            -Dsonar.projectKey=my-project \
-            -Dsonar.host.url=$SONAR_URL \
-            -Dsonar.login=$SONAR_TOKEN \
+            -Dsonar.projectKey=$SONAR_PROJECT_KEY \
             -Dsonar.sources=. \
-            -Dsonar.exclusions=**/.git/**,**/.scannerwork/**,**/node_modules/**,**/dist/**,**/build/** \
-            -Dsonar.sourceEncoding=UTF-8
+            -Dsonar.host.url=$SONAR_HOST_URL \
+            -Dsonar.login=$SONAR_TOKEN \
+            -Dsonar.qualitygate.wait=true
 
-      # -------------------------------------------------
-      # 5. Export SonarQube Issues (for DefectDojo)
-      # -------------------------------------------------
-      - name: Export SonarQube Issues
-        env:
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-          SONAR_URL: ${{ secrets.SONAR_URL }}
+      # -------------------------
+      # Export Sonar Issues
+      # -------------------------
+      - name: Export Sonar Issues
         run: |
           curl -s -u $SONAR_TOKEN: \
-          "$SONAR_URL/api/issues/search?componentKeys=my-project&resolved=false&ps=500" \
+          "$SONAR_HOST_URL/api/issues/search?componentKeys=$SONAR_PROJECT_KEY&resolved=false" \
           -o sonar-report.json
 
-      # -------------------------------------------------
-      # 6. Upload Results to DefectDojo
-      # -------------------------------------------------
+          echo "Exported issues:"
+          cat sonar-report.json | head -c 500
+
+      # -------------------------
+      # Upload to DefectDojo
+      # -------------------------
       - name: Upload to DefectDojo
-        env:
-          DD_API_KEY: ${{ secrets.DD_API_KEY }}
-          DD_URL: ${{ secrets.DD_URL }}
-          DD_ENGAGEMENT_ID: ${{ secrets.DD_ENGAGEMENT_ID }}
         run: |
-          pip install --quiet requests
+          python3 -m pip install --no-cache-dir requests
 
           python3 <<EOF
-          import requests, os
+          import requests, os, sys
 
-          url = os.environ["DD_URL"].rstrip("/") + "/api/v2/import-scan/"
-          headers = {"Authorization": f"Token {os.environ['DD_API_KEY']}"}
+          base_url = os.environ["DD_URL"].rstrip("/")
+          api_key = os.environ["DD_API_KEY"]
+          engagement_id = os.environ["DD_ENGAGEMENT_ID"]
 
-          files = {"file": open("sonar-report.json", "rb")}
-          data = {
-              "scan_type": "SonarQube Scan",
-              "engagement": os.environ["DD_ENGAGEMENT_ID"],
-              "active": "true",
-              "verified": "false"
+          headers = {
+              "Authorization": f"Token {api_key}"
           }
 
-          r = requests.post(url, headers=headers, files=files, data=data)
-          print("DefectDojo response:", r.status_code)
-          print(r.text)
+          file_path = "sonar-report.json"
+
+          if not os.path.exists(file_path):
+              print("Report file not found!")
+              sys.exit(1)
+
+          with open(file_path, "rb") as f:
+              files = {"file": f}
+              data = {
+                  "scan_type": "SonarQube Scan",
+                  "engagement": engagement_id,
+                  "active": "true",
+                  "verified": "false"
+              }
+
+              response = requests.post(
+                  f"{base_url}/api/v2/import-scan/",
+                  headers=headers,
+                  files=files,
+                  data=data
+              )
+
+          print("Status Code:", response.status_code)
+          print("Response:", response.text)
+
+          if response.status_code not in [200, 201]:
+              raise Exception("DefectDojo upload failed")
           EOF
 
-      # -------------------------------------------------
-      # 7. Upload Artifact (Audit / Debug)
-      # -------------------------------------------------
-      - name: Upload SonarQube Report
+      # -------------------------
+      # Upload artifact
+      # -------------------------
+      - name: Upload Reports
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: sonar-report
+          name: sonar-results
           path: sonar-report.json
