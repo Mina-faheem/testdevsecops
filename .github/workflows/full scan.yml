@@ -91,7 +91,7 @@ jobs:
           -H "Authorization: Token $DEFECTDOJO_TOKEN" \
           -F "scan_type=Semgrep JSON Report" \
           -F "file=@semgrep.json" \
-          -F "product_name=project_test"
+          -F "product_name=project_test" \
           -F "engagement_name=Semgrep Scan"
 
       - name: Upload Trivy
@@ -100,7 +100,7 @@ jobs:
           -H "Authorization: Token $DEFECTDOJO_TOKEN" \
           -F "scan_type=Trivy Scan" \
           -F "file=@trivy.json" \
-          -F "product_name=project_test"
+          -F "product_name=project_test" \
           -F "engagement_name=Trivy Scan"
 
       - name: Upload SonarQube
@@ -109,7 +109,7 @@ jobs:
           -H "Authorization: Token $DEFECTDOJO_TOKEN" \
           -F "scan_type=SonarQube Scan" \
           -F "file=@sonar.json" \
-          -F "product_name=project_test"
+          -F "product_name=project_test" \
           -F "engagement_name=SonarQube Scan"
 
     env:
