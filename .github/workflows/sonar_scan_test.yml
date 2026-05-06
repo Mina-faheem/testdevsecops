@@ -1,0 +1,51 @@
+name: sonarqube-to-defectdojo
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  sonar-scan:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Install SonarScanner
+        run: |
+          SCANNER_VERSION=5.0.1.3006
+          curl -sSLo sonar.zip https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/sonar-scanner-cli-${SCANNER_VERSION}-linux.zip
+          unzip sonar.zip
+          mv sonar-scanner-${SCANNER_VERSION}-linux sonar-scanner
+          echo "$(pwd)/sonar-scanner/bin" >> $GITHUB_PATH
+
+      - name: Verify SonarScanner
+        run: sonar-scanner -v
+
+      - name: Run SonarQube Scan
+        env:
+          SONAR_TOKEN: sqp_6b67a15f5759ead141800708c6516e63c0b3164d
+        run: |
+          sonar-scanner \
+            -Dsonar.projectKey=my-project \
+            -Dsonar.sources=. \
+            -Dsonar.host.url=http://0f1dcdfc471c.mylabserver.com \
+            -Dsonar.login=$SONAR_TOKEN
+
+      - name: Export Sonar Issues
+        env:
+          SONAR_TOKEN: sqp_6b67a15f5759ead141800708c6516e63c0b3164d
+        run: |
+          curl -u $SONAR_TOKEN: \
+          "http://0f1dcdfc471c.mylabserver.com/api/issues/search?componentKeys=my-project&resolved=false" \
+          -o sonar-report.json
