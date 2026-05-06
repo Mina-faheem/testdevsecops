@@ -1,0 +1,110 @@
+name: full-sast-trivy-semgrep-sonarqube-defectdojo
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  security-scan:
+    runs-on: ubuntu-latest
+
+    steps:
+      # -------------------------
+      # Checkout code
+      # -------------------------
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # -------------------------
+      # SEMGREP SCAN
+      # -------------------------
+      - name: Run Semgrep scan
+        uses: returntocorp/semgrep-action@v1
+        with:
+          config: auto
+          generateSarif: "1"
+
+      # Save Semgrep JSON
+      - name: Export Semgrep JSON
+        run: |
+          semgrep --config=auto --json > semgrep.json
+
+      # -------------------------
+      # TRIVY SCAN (filesystem)
+      # -------------------------
+      - name: Run Trivy scan
+        uses: aquasecurity/trivy-action@0.24.0
+        with:
+          scan-type: fs
+          format: json
+          output: trivy.json
+
+      # -------------------------
+      # SONARQUBE SCAN
+      # -------------------------
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Install SonarScanner
+        run: |
+          SCANNER_VERSION=5.0.1.3006
+          curl -sSLo sonar.zip https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/sonar-scanner-cli-${SCANNER_VERSION}-linux.zip
+          unzip sonar.zip
+          mv sonar-scanner-${SCANNER_VERSION}-linux sonar-scanner
+          echo "$(pwd)/sonar-scanner/bin" >> $GITHUB_PATH
+
+      - name: Run SonarQube Scan
+        env:
+          SONAR_TOKEN: sqp_6b67a15f5759ead141800708c6516e63c0b3164d
+        run: |
+          sonar-scanner \
+            -Dsonar.projectKey=my-project \
+            -Dsonar.sources=. \
+            -Dsonar.host.url=http://0f1dcdfc471c.mylabserver.com:8080/ \
+            -Dsonar.login=$SONAR_TOKEN
+
+      # -------------------------
+      # SEND TO DEFECTDOJO
+      # -------------------------
+
+      # Upload Semgrep
+      - name: Upload Semgrep to DefectDojo
+        run: |
+          curl -X POST "http://0f1dcdfc471c.mylabserver.com:8080/L/api/v2/import-scan/" \
+          -H "Authorization: Token $DEFECTDOJO_TOKEN" \
+          -F "scan_type=Semgrep JSON Report" \
+          -F "file=@semgrep.json" \
+          -F "engagement_name=Semgrep Scan"
+
+      # Upload Trivy
+      - name: Upload Trivy to DefectDojo
+        run: |
+          curl -X POST "$DEFECTDOJO_URL/api/v2/import-scan/" \
+          -H "Authorization: Token $DEFECTDOJO_TOKEN" \
+          -F "scan_type=Trivy Scan" \
+          -F "file=@trivy.json" \
+          -F "engagement_name=Trivy Scan"
+
+      # Upload SonarQube (optional via API export)
+      - name: Upload SonarQube Issues
+        run: |
+          curl -u $SONAR_TOKEN: \
+          "http://YOUR-SERVER-IP/api/issues/search?componentKeys=my-project&resolved=false" \
+          -o sonar.json
+
+          curl -X POST "$DEFECTDOJO_URL/api/v2/import-scan/" \
+          -H "Authorization: Token $DEFECTDOJO_TOKEN" \
+          -F "scan_type=SonarQube Scan" \
+          -F "file=@sonar.json" \
+          -F "engagement_name=SonarQube Scan"
+
+      # -------------------------
+      # ENV VARIABLES
+      # -------------------------
+      env:
+        DEFECTDOJO_URL: http://0f1dcdfc471c.mylabserver.com:8080/
+        DEFECTDOJO_TOKEN: 514b2ab012ed1f29d6b4f90c3d3218d95b4c58e1
