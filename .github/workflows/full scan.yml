@@ -19,14 +19,13 @@ jobs:
       # -------------------------
       # SEMGREP SCAN
       # -------------------------
+      - name: Install latest Semgrep
+        run: pip install --upgrade semgrep
+      
       - name: Run Semgrep scan
-        uses: returntocorp/semgrep-action@v1
-        with:
-          config: auto
-
-      - name: Export Semgrep JSON
         run: |
-          semgrep --config=auto --json > semgrep.json
+          semgrep --version
+          semgrep --config=auto --json --output=semgrep.json
 
       # -------------------------
       # TRIVY SCAN
