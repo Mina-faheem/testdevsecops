@@ -23,15 +23,13 @@ jobs:
         uses: returntocorp/semgrep-action@v1
         with:
           config: auto
-          generateSarif: "1"
 
-      # Save Semgrep JSON
       - name: Export Semgrep JSON
         run: |
           semgrep --config=auto --json > semgrep.json
 
       # -------------------------
-      # TRIVY SCAN (filesystem)
+      # TRIVY SCAN
       # -------------------------
       - name: Run Trivy scan
         uses: aquasecurity/trivy-action@0.24.0
@@ -64,24 +62,33 @@ jobs:
           sonar-scanner \
             -Dsonar.projectKey=my-project \
             -Dsonar.sources=. \
-            -Dsonar.host.url=http://0f1dcdfc471c.mylabserver.com:8080/ \
+            -Dsonar.host.url=http://0f1dcdfc471c.mylabserver.com \
             -Dsonar.login=$SONAR_TOKEN
+
+      # -------------------------
+      # EXPORT SONAR ISSUES
+      # -------------------------
+      - name: Export SonarQube Issues
+        env:
+          SONAR_TOKEN: sqp_6b67a15f5759ead141800708c6516e63c0b3164d
+        run: |
+          curl -u $SONAR_TOKEN: \
+          "http://0f1dcdfc471c.mylabserver.com/api/issues/search?componentKeys=my-project&resolved=false" \
+          -o sonar.json
 
       # -------------------------
       # SEND TO DEFECTDOJO
       # -------------------------
 
-      # Upload Semgrep
-      - name: Upload Semgrep to DefectDojo
+      - name: Upload Semgrep
         run: |
-          curl -X POST "http://0f1dcdfc471c.mylabserver.com:8080/L/api/v2/import-scan/" \
+          curl -X POST "$DEFECTDOJO_URL/api/v2/import-scan/" \
           -H "Authorization: Token $DEFECTDOJO_TOKEN" \
           -F "scan_type=Semgrep JSON Report" \
           -F "file=@semgrep.json" \
           -F "engagement_name=Semgrep Scan"
 
-      # Upload Trivy
-      - name: Upload Trivy to DefectDojo
+      - name: Upload Trivy
         run: |
           curl -X POST "$DEFECTDOJO_URL/api/v2/import-scan/" \
           -H "Authorization: Token $DEFECTDOJO_TOKEN" \
@@ -89,22 +96,14 @@ jobs:
           -F "file=@trivy.json" \
           -F "engagement_name=Trivy Scan"
 
-      # Upload SonarQube (optional via API export)
-      - name: Upload SonarQube Issues
+      - name: Upload SonarQube
         run: |
-          curl -u $SONAR_TOKEN: \
-          "http://YOUR-SERVER-IP/api/issues/search?componentKeys=my-project&resolved=false" \
-          -o sonar.json
-
           curl -X POST "$DEFECTDOJO_URL/api/v2/import-scan/" \
           -H "Authorization: Token $DEFECTDOJO_TOKEN" \
           -F "scan_type=SonarQube Scan" \
           -F "file=@sonar.json" \
           -F "engagement_name=SonarQube Scan"
 
-      # -------------------------
-      # ENV VARIABLES
-      # -------------------------
-      env:
-        DEFECTDOJO_URL: http://0f1dcdfc471c.mylabserver.com:8080/
-        DEFECTDOJO_TOKEN: 514b2ab012ed1f29d6b4f90c3d3218d95b4c58e1
+    env:
+      DEFECTDOJO_URL: http://0f1dcdfc471c.mylabserver.com:8080/
+      DEFECTDOJO_TOKEN: 514b2ab012ed1f29d6b4f90c3d3218d95b4c58e1
