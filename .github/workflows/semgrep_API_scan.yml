@@ -1,0 +1,19 @@
+name: Semgrep API Scan
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Send repo to Semgrep API
+        run: |
+          curl -X POST \
+          "http://0f1dcdfc471c.mylabserver.com:8000/scan?repo_url=https://github.com/${{ github.repository }}" \
+          -H "Content-Type: application/json"
